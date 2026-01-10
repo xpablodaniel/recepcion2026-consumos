@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-out Habitación {{ checkout.numero }} - Recepción 2026</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .checkout-container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .checkout-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #dc3545;
+        }
+        
+        .checkout-header h1 {
+            color: #dc3545;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .info-checkout {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #6c757d;
+        }
+        
+        .resumen-consumos {
+            margin: 30px 0;
+        }
+        
+        .tabla-consumos {
+            margin-top: 20px;
+        }
+        
+        .tabla-consumos th {
+            background: #0056b3;
+            color: white;
+            padding: 15px;
+        }
+        
+        .tabla-consumos td {
+            padding: 12px;
+        }
+        
+        .badge-categoria {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .categoria-bebidas {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .categoria-estadia {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .categoria-map {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .totales-finales {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 30px 0;
+        }
+        
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .total-row:last-child {
+            border-bottom: none;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 15px;
+            padding-top: 20px;
+            border-top: 2px solid white;
+        }
+        
+        .btn-confirmar-checkout {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn-volver {
+            margin-top: 20px;
+            width: 100%;
+        }
+        
+        .alert-info-checkout {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="checkout-container">
+        <div class="checkout-header">
+            <h1>🚪 CHECK-OUT</h1>
+            <h2>Habitación {{ checkout.numero }}</h2>
+            <p class="text-muted mb-0">Resumen Final de Estadía</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <!-- Información del pasajero -->
+        <div class="info-checkout">
+            <h4 class="mb-3">📋 Información del Huésped</h4>
+            <div class="info-row">
+                <span class="info-label">Pasajero:</span>
+                <span><strong>{{ checkout.pasajero.pasajero }}</strong></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Check-in:</span>
+                <span>{{ checkout.pasajero.ingreso }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Check-out:</span>
+                <span><strong class="text-danger">{{ checkout.pasajero.egreso }} (HOY)</strong></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Plazas ocupadas:</span>
+                <span>{{ checkout.pasajero.plazas }} persona(s)</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Régimen:</span>
+                <span>{{ checkout.pasajero.servicios }}</span>
+            </div>
+        </div>
+
+        <!-- Resumen de consumos -->
+        <div class="resumen-consumos">
+            <h4>💰 Resumen de Consumos</h4>
+            
+            {% if checkout.consumos %}
+            <table class="table tabla-consumos table-hover">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>Categoría</th>
+                        <th class="text-end">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for consumo in checkout.consumos %}
+                    <tr>
+                        <td>{{ consumo.fecha }}</td>
+                        <td>
+                            <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                {{ consumo.categoria }}
+                            </span>
+                        </td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-info text-center">
+                No se registraron consumos extras durante la estadía
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Totales finales -->
+        <div class="totales-finales">
+            <h4 class="mb-3">📊 Total a Cobrar</h4>
+            <div class="total-row">
+                <span>🍺 Bebidas:</span>
+                <span>${{ "%.2f"|format(checkout.totales.Bebidas) }}</span>
+            </div>
+            <div class="total-row">
+                <span>🏨 Estadía:</span>
+                <span>${{ "%.2f"|format(checkout.totales['Estadía']) }}</span>
+            </div>
+            <div class="total-row">
+                <span>🍽️ Map:</span>
+                <span>${{ "%.2f"|format(checkout.totales.Map) }}</span>
+            </div>
+            <div class="total-row">
+                <span>TOTAL A COBRAR:</span>
+                <span>${{ "%.2f"|format(checkout.totales.total) }}</span>
+            </div>
+        </div>
+
+        <!-- Alerta informativa -->
+        <div class="alert-info-checkout">
+            <strong>ℹ️ Información importante:</strong>
+            <ul class="mb-0 mt-2">
+                <li>Al confirmar el check-out, se generará un archivo con el resumen final</li>
+                <li>Los datos del pasajero se archivarán y la habitación quedará disponible</li>
+                <li>Esta acción no se puede deshacer</li>
+            </ul>
+        </div>
+
+        <!-- Botones de acción -->
+        <form action="/checkout/{{ checkout.numero }}/confirmar" method="POST">
+            <button type="submit" class="btn btn-danger btn-confirmar-checkout"
+                    onclick="return confirm('¿Confirmar check-out de la habitación {{ checkout.numero }}?')">
+                ✅ Confirmar Check-out y Generar Resumen
+            </button>
+        </form>
+
+        <a href="/dashboard" class="btn btn-secondary btn-volver">
+            ← Volver al Dashboard
+        </a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

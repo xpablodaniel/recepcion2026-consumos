@@ -7,8 +7,8 @@ import random
 from datetime import datetime, timedelta
 
 # Archivos
-DB_PASAJEROS = 'pasajeros.csv'
-DB_CONSUMOS = 'consumos_diarios.csv'
+DB_PASAJEROS = 'data/pasajeros.csv'
+DB_CONSUMOS = 'data/consumos_diarios.csv'
 
 # Leer pasajeros activos
 df_pasajeros = pd.read_csv(DB_PASAJEROS)

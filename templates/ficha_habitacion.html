@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habitación {{ habitacion.numero }} - Sistema Recepción 2026</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .ficha-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .header-habitacion {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #0056b3;
+        }
+        
+        .numero-hab {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #0056b3;
+        }
+        
+        .info-pasajero {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #6c757d;
+        }
+        
+        .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .seccion-titulo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 30px 0 20px 0;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-agregar-consumo {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .tabla-consumos {
+            background: white;
+        }
+        
+        .tabla-consumos th {
+            background: #0056b3;
+            color: white;
+            padding: 15px;
+        }
+        
+        .tabla-consumos td {
+            padding: 12px;
+            vertical-align: middle;
+        }
+        
+        .badge-categoria {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .categoria-bebidas {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .categoria-estadia {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .categoria-map {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .totales-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 30px;
+        }
+        
+        .total-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .total-item:last-child {
+            border-bottom: none;
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-top: 10px;
+            padding-top: 20px;
+            border-top: 2px solid white;
+        }
+        
+        .btn-volver {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            padding: 12px 25px;
+            background: white;
+            color: #0056b3;
+            border: 2px solid #0056b3;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .btn-volver:hover {
+            background: #0056b3;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        
+        .sin-consumos {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .btn-eliminar {
+            padding: 5px 15px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <a href="/dashboard" class="btn-volver">← Volver al Dashboard</a>
+    
+    <div class="container" style="max-width: 1000px; margin-top: 60px;">
+        <div class="ficha-container">
+            <!-- Header -->
+            <div class="header-habitacion">
+                <div>
+                    <div class="numero-hab">HAB {{ habitacion.numero }}</div>
+                    <div class="text-muted">Ficha de Habitación</div>
+                </div>
+                <div class="text-end">
+                    <h4 class="mb-0">{{ habitacion.pasajero.pasajero }}</h4>
+                    <small class="text-muted">{{ habitacion.pasajero.plazas }} persona(s)</small>
+                </div>
+            </div>
+
+            <!-- Información del pasajero -->
+            <div class="info-pasajero">
+                <h5 class="mb-3">📋 Información de la Reserva</h5>
+                <div class="info-row">
+                    <span class="info-label">Check-in:</span>
+                    <span class="info-value">{{ habitacion.pasajero.ingreso }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Check-out:</span>
+                    <span class="info-value">{{ habitacion.pasajero.egreso }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Régimen:</span>
+                    <span class="info-value">{{ habitacion.pasajero.servicios }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Plazas ocupadas:</span>
+                    <span class="info-value">{{ habitacion.pasajero.plazas }}</span>
+                </div>
+            </div>
+
+            <!-- Formulario para agregar consumo -->
+            <div class="seccion-titulo">
+                ➕ Agregar Nuevo Consumo
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+            
+            <div class="form-agregar-consumo">
+                <form action="/habitacion/{{ habitacion.numero }}/agregar" method="POST" class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Categoría</label>
+                        <select name="categoria" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Bebidas">🍺 Bebidas</option>
+                            <option value="Map">🍽️ Map</option>
+                            <option value="Estadía">🏨 Estadía</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Monto ($)</label>
+                        <input type="number" name="monto" class="form-control" step="0.01" min="0" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Agregar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Lista de consumos -->
+            <div class="seccion-titulo">
+                📊 Consumos Registrados ({{ habitacion.cantidad_consumos }})
+            </div>
+
+            {% if habitacion.consumos %}
+            <table class="table tabla-consumos table-hover">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>Categoría</th>
+                        <th class="text-end">Monto</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for consumo in habitacion.consumos %}
+                    <tr>
+                        <td>{{ consumo.fecha }}</td>
+                        <td>
+                            <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                {{ consumo.categoria }}
+                            </span>
+                        </td>
+                        <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                        <td class="text-center">
+                            <a href="/habitacion/{{ habitacion.numero }}/eliminar/{{ consumo.indice }}" 
+                               class="btn btn-danger btn-sm btn-eliminar"
+                               onclick="return confirm('¿Eliminar este consumo?')">
+                                🗑️ Eliminar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="sin-consumos">
+                <h5>🔍 No hay consumos registrados para esta habitación</h5>
+                <p>Utiliza el formulario de arriba para agregar el primer consumo</p>
+            </div>
+            {% endif %}
+
+            <!-- Totales -->
+            <div class="totales-card">
+                <h4 class="mb-3">💰 Resumen de Consumos</h4>
+                <div class="total-item">
+                    <span>🍺 Bebidas:</span>
+                    <span>${{ "%.2f"|format(habitacion.totales.Bebidas) }}</span>
+                </div>
+                <div class="total-item">
+                    <span>🏨 Estadía:</span>
+                    <span>${{ "%.2f"|format(habitacion.totales['Estadía']) }}</span>
+                </div>
+                <div class="total-item">
+                    <span>🍽️ Map:</span>
+                    <span>${{ "%.2f"|format(habitacion.totales.Map) }}</span>
+                </div>
+                <div class="total-item">
+                    <span>TOTAL GENERAL:</span>
+                    <span>${{ "%.2f"|format(habitacion.totales.total) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
