@@ -199,10 +199,20 @@
             <div class="alert alert-danger d-flex justify-content-between align-items-center mb-4" style="font-size: 1.1rem;">
                 <div>
                     <strong>🚪 CHECK-OUT PROGRAMADO PARA HOY</strong>
-                    <p class="mb-0 mt-1">El huésped tiene traslado incluido. Puede agregar consumos de último momento antes del retiro programado</p>
+                    <p class="mb-0 mt-1">El huésped puede retirarse. Puede agregar consumos de último momento antes del check-out</p>
                 </div>
                 <a href="/checkout/{{ habitacion.numero }}" class="btn btn-danger btn-lg">
                     ➡️ Procesar Check-out
+                </a>
+            </div>
+            {% else %}
+            <!-- Banner de Check-out Anticipado -->
+            <div class="alert alert-warning mb-4" style="font-size: 1.05rem;">
+                <strong>⚠️ Check-out Anticipado</strong>
+                <p class="mb-2 mt-2">Si el huésped se retira <strong>antes</strong> de la fecha programada de egreso ({{ habitacion.pasajero.egreso }}), puede procesar el check-out anticipadamente.</p>
+                <p class="mb-2">📌 <strong>Importante:</strong> Los trabajadores activos vienen por sus medios, por lo que pueden retirarse en cualquier momento.</p>
+                <a href="/checkout/{{ habitacion.numero }}" class="btn btn-warning btn-sm mt-2">
+                    ➡️ Procesar Check-out Anticipado
                 </a>
             </div>
             {% endif %}
