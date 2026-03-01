@@ -28,16 +28,16 @@ wheels/
 instance/
 .webassets-cache
 
-# Archivos de datos generados
-data/consumos_diarios.csv
+# Archivos de datos sensibles - NO subir al repositorio
+data/*.csv
+data/backups/
 data/cierres/*.csv
 data/cierres/*.xlsx
-data/*BACKUP*.csv
 *.xlsx
-*.csv
 
-# Excepto pasajeros.csv de ejemplo
-!data/pasajeros.csv
+# Excepto archivos de ejemplo/plantilla
+!data/*_ejemplo.csv
+!data/README.md
 
 # IDEs
 .vscode/
