@@ -199,22 +199,10 @@
             <div class="alert alert-danger d-flex justify-content-between align-items-center mb-4" style="font-size: 1.1rem;">
                 <div>
                     <strong>🚪 CHECK-OUT PROGRAMADO PARA HOY</strong>
-                    <p class="mb-0 mt-1">El huésped puede agregar consumos de último momento antes de retirarse</p>
+                    <p class="mb-0 mt-1">El huésped tiene traslado incluido. Puede agregar consumos de último momento antes del retiro programado</p>
                 </div>
                 <a href="/checkout/{{ habitacion.numero }}" class="btn btn-danger btn-lg">
                     ➡️ Procesar Check-out
-                </a>
-            </div>
-            {% else %}
-            <!-- Botón de check-out anticipado para retiros antes de la fecha programada -->
-            <div class="alert alert-warning d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <strong>⚠️ Check-out Anticipado</strong>
-                    <p class="mb-0 mt-1">Si el huésped se retira antes de la fecha programada ({{ habitacion.pasajero.egreso }}), procese aquí el check-out anticipado</p>
-                </div>
-                <a href="/checkout/{{ habitacion.numero }}" class="btn btn-warning btn-lg" 
-                   onclick="return confirm('¿Confirma que el huésped se retira ANTICIPADAMENTE antes de la fecha programada ({{ habitacion.pasajero.egreso }})?');">
-                    🚪 Check-out Anticipado
                 </a>
             </div>
             {% endif %}
@@ -269,6 +257,19 @@
             
             <div class="form-agregar-consumo">
                 <form action="/habitacion/{{ habitacion.numero }}/agregar" method="POST" class="row g-3">
+                    {% if habitacion.cantidad_pasajeros > 1 %}
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">👤 Pasajero (¿A quién cargar el consumo?)</label>
+                        <select name="pasajero" class="form-select" required>
+                            <option value="">Seleccionar pasajero...</option>
+                            {% for pasajero in habitacion.todos_pasajeros %}
+                            <option value="{{ pasajero.nombre }}">
+                                {{ pasajero.nombre }} ({{ pasajero.edad }} años - Voucher: {{ pasajero.voucher }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Categoría</label>
                         <select name="categoria" class="form-select" required>
@@ -294,36 +295,88 @@
             </div>
 
             {% if habitacion.consumos %}
-            <table class="table tabla-consumos table-hover">
-                <thead>
-                    <tr>
-                        <th>Fecha/Hora</th>
-                        <th>Categoría</th>
-                        <th class="text-end">Monto</th>
-                        <th class="text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for consumo in habitacion.consumos %}
-                    <tr>
-                        <td>{{ consumo.fecha }}</td>
-                        <td>
-                            <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                {{ consumo.categoria }}
-                            </span>
-                        </td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
-                        <td class="text-center">
-                            <a href="/habitacion/{{ habitacion.numero }}/eliminar/{{ consumo.indice }}" 
-                               class="btn btn-danger btn-sm btn-eliminar"
-                               onclick="return confirm('¿Eliminar este consumo?')">
-                                🗑️ Eliminar
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                {% if habitacion.tiene_vouchers_separados and habitacion.consumos_por_pasajero %}
+                <!-- Vista de consumos SEPARADOS por pasajero -->
+                <div class="alert alert-info mb-3">
+                    <strong>📋 Consumos separados por pasajero</strong> - Cada persona tiene su propia cuenta
+                </div>
+                {% for nombre_pasajero, datos in habitacion.consumos_por_pasajero.items() %}
+                <div style="margin-bottom: 30px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #0056b3;">
+                    <h5 style="margin-bottom: 15px;">👤 {{ nombre_pasajero }}</h5>
+                    <table class="table tabla-consumos table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Categoría</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for consumo in datos.consumos %}
+                            <tr>
+                                <td>{{ consumo.fecha }}</td>
+                                <td>
+                                    <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                        {{ consumo.categoria }}
+                                    </span>
+                                </td>
+                                <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                                <td class="text-center">
+                                    <a href="/habitacion/{{ habitacion.numero }}/eliminar/{{ consumo.indice }}" 
+                                       class="btn btn-danger btn-sm btn-eliminar"
+                                       onclick="return confirm('¿Eliminar este consumo de {{ nombre_pasajero }}?')">
+                                        🗑️ Eliminar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr style="background: #e7f3ff; font-weight: bold;">
+                                <td colspan="2">SUBTOTAL {{ nombre_pasajero }}</td>
+                                <td class="text-end">${{ "%.2f"|format(datos.total_general) }}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+                {% else %}
+                <!-- Vista de consumos UNIFICADOS (familia/grupo con mismo voucher) -->
+                <table class="table tabla-consumos table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            {% if habitacion.cantidad_pasajeros > 1 %}<th>Pasajero</th>{% endif %}
+                            <th>Categoría</th>
+                            <th class="text-end">Monto</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for consumo in habitacion.consumos %}
+                        <tr>
+                            <td>{{ consumo.fecha }}</td>
+                            {% if habitacion.cantidad_pasajeros > 1 %}
+                            <td><small>{{ consumo.pasajero }}</small></td>
+                            {% endif %}
+                            <td>
+                                <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                    {{ consumo.categoria }}
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                            <td class="text-center">
+                                <a href="/habitacion/{{ habitacion.numero }}/eliminar/{{ consumo.indice }}" 
+                                   class="btn btn-danger btn-sm btn-eliminar"
+                                   onclick="return confirm('¿Eliminar este consumo?')">
+                                    🗑️ Eliminar
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
             {% else %}
             <div class="sin-consumos">
                 <h5>🔍 No hay consumos registrados para esta habitación</h5>
@@ -332,6 +385,40 @@
             {% endif %}
 
             <!-- Totales -->
+            {% if habitacion.tiene_vouchers_separados and habitacion.consumos_por_pasajero %}
+            <!-- Totales separados por pasajero -->
+            <div class="totales-card">
+                <h4 class="mb-3">💰 Resumen de Consumos por Pasajero</h4>
+                {% for nombre_pasajero, datos in habitacion.consumos_por_pasajero.items() %}
+                <div style="padding: 15px; margin-bottom: 15px; background: #ffffff; border: 2px solid #0056b3; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h6 style="border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-bottom: 10px; color: #0056b3; font-weight: bold;">
+                        👤 {{ nombre_pasajero }}
+                    </h6>
+                    <div class="total-item" style="color: #333;">
+                        <span>🍺 Bebidas:</span>
+                        <span>${{ "%.2f"|format(datos.totales.Bebidas) }}</span>
+                    </div>
+                    <div class="total-item" style="color: #333;">
+                        <span>🏨 Estadía:</span>
+                        <span>${{ "%.2f"|format(datos.totales['Estadía']) }}</span>
+                    </div>
+                    <div class="total-item" style="color: #333;">
+                        <span>🍽️ Map:</span>
+                        <span>${{ "%.2f"|format(datos.totales.Map) }}</span>
+                    </div>
+                    <div class="total-item" style="font-weight: bold; font-size: 1.1rem; border-top: 2px solid #0056b3; padding-top: 8px; margin-top: 8px; color: #0056b3;">
+                        <span>TOTAL {{ nombre_pasajero.split()[0] }}:</span>
+                        <span>${{ "%.2f"|format(datos.total_general) }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="total-item" style="font-weight: bold; font-size: 1.3rem; border-top: 3px solid #dc3545; padding-top: 15px; margin-top: 15px; color: #dc3545;">
+                    <span>TOTAL HABITACIÓN:</span>
+                    <span>${{ "%.2f"|format(habitacion.totales.total) }}</span>
+                </div>
+            </div>
+            {% else %}
+            <!-- Totales unificados -->
             <div class="totales-card">
                 <h4 class="mb-3">💰 Resumen de Consumos</h4>
                 <div class="total-item">
@@ -351,6 +438,7 @@
                     <span>${{ "%.2f"|format(habitacion.totales.total) }}</span>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 

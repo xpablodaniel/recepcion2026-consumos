@@ -166,9 +166,15 @@
         <div class="info-checkout">
             <h4 class="mb-3">📋 Información del Huésped</h4>
             <div class="info-row">
-                <span class="info-label">Pasajero:</span>
+                <span class="info-label">Pasajero (Titular):</span>
                 <span><strong>{{ checkout.pasajero.pasajero }}</strong></span>
             </div>
+            {% if checkout.cantidad_pasajeros > 1 %}
+            <div class="info-row">
+                <span class="info-label">Total de Pasajeros:</span>
+                <span><strong>{{ checkout.cantidad_pasajeros }} personas</strong></span>
+            </div>
+            {% endif %}
             <div class="info-row">
                 <span class="info-label">Check-in:</span>
                 <span>{{ checkout.pasajero.ingreso }}</span>
@@ -180,12 +186,7 @@
             {% if checkout.es_checkout_hoy %}
             <div class="info-row">
                 <span class="info-label">Estado:</span>
-                <span><strong class="text-danger">🚪 Check-out del día (según lo programado)</strong></span>
-            </div>
-            {% else %}
-            <div class="info-row">
-                <span class="info-label">Estado:</span>
-                <span><strong class="text-warning">⚠️ Check-out ANTICIPADO (retiro antes de la fecha)</strong></span>
+                <span><strong class="text-danger">🚪 Check-out del día - Traslado incluido</strong></span>
             </div>
             {% endif %}
             <div class="info-row">
@@ -197,34 +198,90 @@
                 <span>{{ checkout.pasajero.servicios }}</span>
             </div>
         </div>
+        
+        <!-- Lista de todos los pasajeros si hay más de uno -->
+        {% if checkout.cantidad_pasajeros > 1 %}
+        <div class="info-checkout" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+            <h5 class="mb-3">👥 Todos los Pasajeros de la Habitación</h5>
+            {% for pasajero in checkout.todos_pasajeros %}
+            <div class="info-row">
+                <span class="info-label">{{ loop.index }}. {{ pasajero.nombre }}</span>
+                <span><small>{{ pasajero.edad }} años | Voucher: {{ pasajero.voucher }}</small></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- Resumen de consumos -->
         <div class="resumen-consumos">
             <h4>💰 Resumen de Consumos</h4>
             
             {% if checkout.consumos %}
-            <table class="table tabla-consumos table-hover">
-                <thead>
-                    <tr>
-                        <th>Fecha/Hora</th>
-                        <th>Categoría</th>
-                        <th class="text-end">Monto</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for consumo in checkout.consumos %}
-                    <tr>
-                        <td>{{ consumo.fecha }}</td>
-                        <td>
-                            <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                {{ consumo.categoria }}
-                            </span>
-                        </td>
-                        <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                {% if checkout.tiene_vouchers_separados and checkout.consumos_por_pasajero %}
+                <!-- Consumos separados por pasajero -->
+                <div class="alert alert-warning mb-3">
+                    <strong>📋 Consumos Separados:</strong> Cada pasajero tiene su cuenta individual
+                </div>
+                {% for nombre_pasajero, datos in checkout.consumos_por_pasajero.items() %}
+                <div style="margin-bottom: 25px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #0056b3;">
+                    <h5 style="margin-bottom: 15px;">👤 {{ nombre_pasajero }}</h5>
+                    <table class="table tabla-consumos table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha/Hora</th>
+                                <th>Categoría</th>
+                                <th class="text-end">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for consumo in datos.consumos %}
+                            <tr>
+                                <td>{{ consumo.fecha }}</td>
+                                <td>
+                                    <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                        {{ consumo.categoria }}
+                                    </span>
+                                </td>
+                                <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr style="background: #e7f3ff; font-weight: bold;">
+                                <td colspan="2">SUBTOTAL {{ nombre_pasajero }}</td>
+                                <td class="text-end">${{ "%.2f"|format(datos.total_general) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+                {% else %}
+                <!-- Consumos unificados -->
+                <table class="table tabla-consumos table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            {% if checkout.cantidad_pasajeros > 1 %}<th>Pasajero</th>{% endif %}
+                            <th>Categoría</th>
+                            <th class="text-end">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for consumo in checkout.consumos %}
+                        <tr>
+                            <td>{{ consumo.fecha }}</td>
+                            {% if checkout.cantidad_pasajeros > 1 %}
+                            <td><small>{{ consumo.pasajero }}</small></td>
+                            {% endif %}
+                            <td>
+                                <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
+                                    {{ consumo.categoria }}
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
             {% else %}
             <div class="alert alert-info text-center">
                 No se registraron consumos extras durante la estadía
@@ -233,6 +290,40 @@
         </div>
 
         <!-- Totales finales -->
+        {% if checkout.tiene_vouchers_separados and checkout.consumos_por_pasajero %}
+        <!-- Totales separados por pasajero -->
+        <div class="totales-finales">
+            <h4 class="mb-3">📊 Totales por Pasajero</h4>
+            {% for nombre_pasajero, datos in checkout.consumos_por_pasajero.items() %}
+            <div style="padding: 15px; margin-bottom: 15px; background: rgba(255,255,255,0.95); border-radius: 8px; color: #333; border: 2px solid rgba(255,255,255,0.5);">
+                <h6 style="border-bottom: 2px solid #0056b3; padding-bottom: 8px; margin-bottom: 10px; color: #0056b3; font-weight: bold;">
+                    👤 {{ nombre_pasajero }}
+                </h6>
+                <div class="total-row" style="border-bottom: 1px solid #dee2e6; padding: 8px 0; color: #333;">
+                    <span>🍺 Bebidas:</span>
+                    <span>${{ "%.2f"|format(datos.totales.Bebidas) }}</span>
+                </div>
+                <div class="total-row" style="border-bottom: 1px solid #dee2e6; padding: 8px 0; color: #333;">
+                    <span>🏨 Estadía:</span>
+                    <span>${{ "%.2f"|format(datos.totales['Estadía']) }}</span>
+                </div>
+                <div class="total-row" style="border-bottom: 1px solid #dee2e6; padding: 8px 0; color: #333;">
+                    <span>🍽️ Map:</span>
+                    <span>${{ "%.2f"|format(datos.totales.Map) }}</span>
+                </div>
+                <div class="total-row" style="font-weight: bold; font-size: 1.1rem; border-top: 2px solid #0056b3; padding: 12px 0; color: #0056b3;">
+                    <span>TOTAL {{ nombre_pasajero.split()[0] }}:</span>
+                    <span>${{ "%.2f"|format(datos.total_general) }}</span>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="total-row" style="font-size: 1.5rem; font-weight: bold; margin-top: 15px; padding-top: 20px; border-top: 3px solid white;">
+                <span>TOTAL HABITACIÓN:</span>
+                <span>${{ "%.2f"|format(checkout.totales.total) }}</span>
+            </div>
+        </div>
+        {% else %}
+        <!-- Totales unificados -->
         <div class="totales-finales">
             <h4 class="mb-3">📊 Total a Cobrar</h4>
             <div class="total-row">
@@ -252,26 +343,17 @@
                 <span>${{ "%.2f"|format(checkout.totales.total) }}</span>
             </div>
         </div>
+        {% endif %}
 
         <!-- Alerta informativa -->
         {% if checkout.es_checkout_hoy %}
         <div class="alert-info-checkout">
-            <strong>ℹ️ Check-out del día:</strong>
+            <strong>ℹ️ Check-out del día - Traslado incluido:</strong>
             <ul class="mb-0 mt-2">
                 <li>Este es el check-out programado según la fecha de egreso de la reserva</li>
+                <li>El huésped tiene traslado incluido de regreso</li>
                 <li>Al confirmar, se generará un archivo con el resumen final</li>
                 <li>Los datos del pasajero se archivarán y la habitación quedará disponible</li>
-                <li>Esta acción no se puede deshacer</li>
-            </ul>
-        </div>
-        {% else %}
-        <div class="alert alert-warning">
-            <strong>⚠️ Check-out ANTICIPADO:</strong>
-            <ul class="mb-0 mt-2">
-                <li><strong>ATENCIÓN:</strong> El huésped se retira ANTES de la fecha programada ({{ checkout.pasajero.egreso }})</li>
-                <li>Esto puede ser por emergencia personal, cambio de planes u otros motivos</li>
-                <li>Al confirmar, se procesará el check-out igualmente y la habitación quedará disponible</li>
-                <li>Los datos del pasajero se archivarán</li>
                 <li>Esta acción no se puede deshacer</li>
             </ul>
         </div>

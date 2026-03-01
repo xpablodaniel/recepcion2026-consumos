@@ -79,25 +79,34 @@ def ficha_habitacion(num_habitacion):
 @app.route('/habitacion/<int:num_habitacion>/agregar', methods=['POST'])
 def agregar_consumo_habitacion(num_habitacion):
     """Agrega un consumo a una habitación desde su ficha"""
+    from core.dashboard import obtener_todos_pasajeros_habitacion
+    
     categoria = request.form.get('categoria')
     monto = request.form.get('monto')
+    pasajero_seleccionado = request.form.get('pasajero')  # Nuevo: pasajero seleccionado
     
     # Validación
     if not categoria or not monto:
         flash('Todos los campos son obligatorios', 'danger')
         return redirect(f'/habitacion/{num_habitacion}')
     
-    # Obtener nombre del pasajero
+    # Obtener habitaciones ocupadas
     habitaciones_ocupadas = obtener_habitaciones_ocupadas()
     if num_habitacion not in habitaciones_ocupadas:
         flash('Habitación no encontrada', 'danger')
         return redirect('/dashboard')
     
-    pasajero = habitaciones_ocupadas[num_habitacion]['pasajero']
+    # Determinar a qué pasajero cargar el consumo
+    if pasajero_seleccionado:
+        # Si se seleccionó un pasajero específico (habitaciones con múltiples vouchers)
+        pasajero = pasajero_seleccionado
+    else:
+        # Si no hay selección (habitación con 1 persona o mismo voucher), usar el titular
+        pasajero = habitaciones_ocupadas[num_habitacion]['pasajero']
     
     # Agregar el consumo
     if agregar_consumo(num_habitacion, categoria, monto, pasajero):
-        flash(f'✅ Consumo de ${monto} agregado correctamente', 'success')
+        flash(f'✅ Consumo de ${monto} agregado a {pasajero}', 'success')
     else:
         flash('❌ Error al agregar el consumo', 'danger')
     

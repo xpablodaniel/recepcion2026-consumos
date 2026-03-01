@@ -127,6 +127,61 @@ def obtener_habitaciones_ocupadas(archivo_pasajeros='data/pasajeros.csv'):
     return habitaciones_ocupadas
 
 
+def obtener_todos_pasajeros_habitacion(num_habitacion, archivo_pasajeros='data/pasajeros.csv'):
+    """
+    Obtiene TODOS los pasajeros de una habitación específica con sus datos individuales.
+    Esto permite manejar consumos separados cuando hay personas con distintos vouchers.
+    
+    Args:
+        num_habitacion (int): Número de habitación
+        archivo_pasajeros (str): Ruta al archivo CSV de pasajeros
+    
+    Returns:
+        Lista de diccionarios con datos de cada pasajero de la habitación.
+        Cada pasajero incluye: nombre, voucher, edad, documento, servicios
+        Retorna lista vacía si la habitación no está ocupada.
+    """
+    if not os.path.exists(archivo_pasajeros):
+        return []
+    
+    df = pd.read_csv(archivo_pasajeros)
+    fecha_hoy = datetime.now().strftime('%d/%m/%Y')
+    
+    # Filtrar pasajeros de esta habitación que ya ingresaron
+    pasajeros = []
+    for _, row in df.iterrows():
+        # Verificar que sea la habitación correcta
+        if int(row['Nro. habitación']) != num_habitacion:
+            continue
+        
+        # Verificar que ya ingresó
+        fecha_ingreso = row['Fecha de ingreso']
+        try:
+            ingreso_dt = datetime.strptime(fecha_ingreso, '%d/%m/%Y')
+            hoy_dt = datetime.strptime(fecha_hoy, '%d/%m/%Y')
+            
+            if ingreso_dt > hoy_dt:
+                continue  # No ha ingresado aún
+        except:
+            pass  # Si hay error en fecha, incluir
+        
+        # Agregar pasajero a la lista
+        pasajeros.append({
+            'nombre': row['Apellido y nombre'],
+            'voucher': str(row.get('Voucher', '')).strip(),
+            'edad': int(row.get('Edad', 0)),
+            'documento': f"{row.get('Tipo documento', 'DNI')} {row.get('Nro. doc.', '')}",
+            'servicios': row.get('Servicios', ''),
+            'ingreso': row['Fecha de ingreso'],
+            'egreso': row['Fecha de egreso']
+        })
+    
+    # Ordenar por edad (mayor edad primero) para que el titular aparezca primero
+    pasajeros.sort(key=lambda p: p['edad'], reverse=True)
+    
+    return pasajeros
+
+
 def obtener_habitaciones_reservadas_futuras(archivo_pasajeros='data/pasajeros.csv'):
     """
     Obtiene la lista de habitaciones con reservas para ingresos futuros.
