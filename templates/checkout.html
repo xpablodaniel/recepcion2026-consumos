@@ -186,12 +186,7 @@
             {% if checkout.es_checkout_hoy %}
             <div class="info-row">
                 <span class="info-label">Estado:</span>
-                <span><strong class="text-success">🚪 Check-out del día</strong></span>
-            </div>
-            {% else %}
-            <div class="info-row">
-                <span class="info-label">Estado:</span>
-                <span><strong class="text-warning">⚠️ Check-out Anticipado</strong></span>
+                <span><strong class="text-danger">🚪 Check-out del día - Traslado incluido</strong></span>
             </div>
             {% endif %}
             <div class="info-row">
@@ -353,21 +348,11 @@
         <!-- Alerta informativa -->
         {% if checkout.es_checkout_hoy %}
         <div class="alert-info-checkout">
-            <strong>ℹ️ Check-out del día:</strong>
+            <strong>ℹ️ Check-out del día - Traslado incluido:</strong>
             <ul class="mb-0 mt-2">
                 <li>Este es el check-out programado según la fecha de egreso de la reserva</li>
+                <li>El huésped tiene traslado incluido de regreso</li>
                 <li>Al confirmar, se generará un archivo con el resumen final</li>
-                <li>Los datos del pasajero se archivarán y la habitación quedará disponible</li>
-                <li>Esta acción no se puede deshacer</li>
-            </ul>
-        </div>
-        {% else %}
-        <div class="alert-info-checkout" style="background: #fff3cd; border-left: 4px solid #ffc107;">
-            <strong>⚠️ Check-out Anticipado:</strong>
-            <ul class="mb-0 mt-2">
-                <li><strong>IMPORTANTE:</strong> El huésped se retira ANTES de la fecha programada ({{ checkout.pasajero.egreso }})</li>
-                <li>Los trabajadores activos vienen por sus medios y pueden retirarse en cualquier momento</li>
-                <li>Al confirmar, se generará un archivo con el resumen final hasta hoy</li>
                 <li>Los datos del pasajero se archivarán y la habitación quedará disponible</li>
                 <li>Esta acción no se puede deshacer</li>
             </ul>
