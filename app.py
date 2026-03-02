@@ -176,37 +176,35 @@ def confirmar_checkout(num_habitacion):
 @app.route('/checkout-masivo')
 def vista_checkout_masivo():
     """Vista previa del checkout masivo con resumen de habitaciones y consumos"""
-    from core.dashboard import obtener_habitaciones_checkout, es_checkout_hoy
+    from core.dashboard import obtener_habitaciones_checkout_pendientes
     from core.consumos import obtener_total_consumos
     
-    # Obtener todas las habitaciones con checkout hoy
-    habitaciones_ocupadas = obtener_habitaciones_ocupadas()
-    checkouts_hoy = obtener_habitaciones_checkout()
+    # Obtener todas las habitaciones con checkout pendiente (hoy + vencidas)
+    habitaciones_checkout = obtener_habitaciones_checkout_pendientes()
     
-    if not checkouts_hoy:
-        flash('No hay habitaciones con checkout programado para hoy', 'info')
+    if not habitaciones_checkout:
+        flash('No hay habitaciones con checkout pendiente para procesar', 'info')
         return redirect('/dashboard')
     
     # Preparar resumen detallado
     resumen_checkouts = []
     total_consumos_general = 0
     
-    for num_hab in sorted(checkouts_hoy):
-        if num_hab in habitaciones_ocupadas:
-            datos = habitaciones_ocupadas[num_hab]
-            totales_consumos = obtener_total_consumos(num_hab)
-            
-            resumen_checkouts.append({
-                'habitacion': num_hab,
-                'pasajero': datos['pasajero'],
-                'plazas': datos['plazas'],
-                'ingreso': datos['ingreso'],
-                'egreso': datos['egreso'],
-                'voucher': datos.get('voucher', 'N/A'),
-                'total_consumos': totales_consumos['total'],
-                'detalle_consumos': totales_consumos
-            })
-            total_consumos_general += totales_consumos['total']
+    for num_hab in sorted(habitaciones_checkout.keys()):
+        datos = habitaciones_checkout[num_hab]
+        totales_consumos = obtener_total_consumos(num_hab)
+        
+        resumen_checkouts.append({
+            'habitacion': num_hab,
+            'pasajero': datos['pasajero'],
+            'plazas': datos['plazas'],
+            'ingreso': datos['ingreso'],
+            'egreso': datos['egreso'],
+            'voucher': datos.get('voucher', 'N/A'),
+            'total_consumos': totales_consumos['total'],
+            'detalle_consumos': totales_consumos
+        })
+        total_consumos_general += totales_consumos['total']
     
     return render_template('checkout_masivo.html', 
                          checkouts=resumen_checkouts,
@@ -217,35 +215,59 @@ def vista_checkout_masivo():
 @app.route('/checkout-masivo/confirmar', methods=['POST'])
 def confirmar_checkout_masivo():
     """Procesa el checkout masivo: elimina todos los pasajeros con egreso hoy y sus consumos pagados"""
-    from core.dashboard import obtener_habitaciones_checkout
+    from core.dashboard import obtener_habitaciones_checkout_pendientes
     
     try:
-        # Obtener habitaciones con checkout hoy
-        checkouts_hoy = obtener_habitaciones_checkout()
-        
-        if not checkouts_hoy:
+        if not os.path.exists(DB_PASAJEROS):
+            flash('No hay archivo de pasajeros para procesar', 'warning')
+            return redirect('/dashboard')
+
+        df_pasajeros = pd.read_csv(DB_PASAJEROS)
+        hoy_dt = datetime.now().date()
+        ingreso_dt = pd.to_datetime(df_pasajeros['Fecha de ingreso'], format='%d/%m/%Y', errors='coerce')
+        egreso_dt = pd.to_datetime(df_pasajeros['Fecha de egreso'], format='%d/%m/%Y', errors='coerce')
+
+        mask_checkout_pendiente = (
+            ingreso_dt.dt.date <= hoy_dt
+        ) & (
+            egreso_dt.dt.date <= hoy_dt
+        )
+
+        df_checkout = df_pasajeros[mask_checkout_pendiente].copy()
+        habitaciones_checkout = set(df_checkout['Nro. habitación'].astype(int).tolist())
+
+        if not habitaciones_checkout:
             flash('No hay habitaciones para procesar', 'info')
             return redirect('/dashboard')
         
-        cantidad_procesada = len(checkouts_hoy)
+        cantidad_procesada = len(habitaciones_checkout)
         
-        # 1. Eliminar consumos de todas las habitaciones con checkout hoy
+        # 1. Eliminar consumos solo de los pasajeros en checkout pendiente
         consumos_eliminados = 0
         if os.path.exists(DB_CONSUMOS):
             df_consumos = pd.read_csv(DB_CONSUMOS)
             consumos_antes = len(df_consumos)
-            df_consumos = df_consumos[~df_consumos['habitacion'].isin(checkouts_hoy)]
+
+            consumos_habitacion = pd.to_numeric(df_consumos['habitacion'], errors='coerce').fillna(-1).astype(int)
+            pasajeros_checkout_keys = set(
+                zip(
+                    df_checkout['Nro. habitación'].astype(int),
+                    df_checkout['Apellido y nombre'].astype(str)
+                )
+            )
+
+            mask_consumo_checkout = [
+                (hab, pasajero) in pasajeros_checkout_keys
+                for hab, pasajero in zip(consumos_habitacion, df_consumos['pasajero'].astype(str))
+            ]
+
+            df_consumos = df_consumos[~pd.Series(mask_consumo_checkout, index=df_consumos.index)]
             consumos_eliminados = consumos_antes - len(df_consumos)
             df_consumos.to_csv(DB_CONSUMOS, index=False)
         
-        # 2. Eliminar pasajeros con fecha de egreso = hoy
-        if os.path.exists(DB_PASAJEROS):
-            df_pasajeros = pd.read_csv(DB_PASAJEROS)
-            fecha_hoy = datetime.now().strftime('%d/%m/%Y')
-            
-            # Eliminar todas las filas con egreso = hoy
-            df_pasajeros = df_pasajeros[df_pasajeros['Fecha de egreso'] != fecha_hoy]
-            df_pasajeros.to_csv(DB_PASAJEROS, index=False)
+        # 2. Eliminar pasajeros con fecha de egreso <= hoy (incluye vencidos)
+        df_pasajeros = df_pasajeros[~mask_checkout_pendiente]
+        df_pasajeros.to_csv(DB_PASAJEROS, index=False)
         
         flash(f'✅ Checkout masivo completado: {cantidad_procesada} habitaciones liberadas. '
               f'Consumos pagados: {consumos_eliminados} registros eliminados. '

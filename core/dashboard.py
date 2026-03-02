@@ -6,6 +6,7 @@ Calcula estados y colores según ocupación y consumos.
 import pandas as pd
 import os
 from datetime import datetime
+from pandas.errors import EmptyDataError
 
 # Estructura del hotel
 PISOS = {
@@ -54,16 +55,18 @@ def obtener_habitaciones_ocupadas(archivo_pasajeros='data/pasajeros.csv'):
     df = pd.read_csv(archivo_pasajeros)
     fecha_hoy = datetime.now().strftime('%d/%m/%Y')
     
-    # Filtrar pasajeros que ya ingresaron
+    # Filtrar pasajeros realmente activos hoy: ingreso <= hoy <= egreso
     pasajeros_activos = []
     for _, row in df.iterrows():
         fecha_ingreso = row['Fecha de ingreso']
+        fecha_egreso = row.get('Fecha de egreso', '')
         
         try:
             ingreso_dt = datetime.strptime(fecha_ingreso, '%d/%m/%Y')
+            egreso_dt = datetime.strptime(fecha_egreso, '%d/%m/%Y')
             hoy_dt = datetime.strptime(fecha_hoy, '%d/%m/%Y')
             
-            if ingreso_dt <= hoy_dt:
+            if ingreso_dt <= hoy_dt <= egreso_dt:
                 pasajeros_activos.append(row.to_dict())
         except:
             # Si hay error en la fecha, incluir por defecto
@@ -114,9 +117,16 @@ def obtener_habitaciones_ocupadas(archivo_pasajeros='data/pasajeros.csv'):
             titular = obtener_titular_por_edad(pasajeros_hab)
         
         if titular:
+            cantidad_pasajeros = len(pasajeros_hab)
+
+            try:
+                plazas_titular = int(titular.get('Plazas ocupadas', 0))
+            except:
+                plazas_titular = 0
+
             habitaciones_ocupadas[num_hab] = {
                 'pasajero': titular['Apellido y nombre'],
-                'plazas': int(titular['Plazas ocupadas']),
+                'plazas': max(cantidad_pasajeros, plazas_titular),
                 'ingreso': titular['Fecha de ingreso'],
                 'egreso': titular['Fecha de egreso'],
                 'servicios': titular['Servicios'],
@@ -193,25 +203,41 @@ def obtener_habitaciones_reservadas_futuras(archivo_pasajeros='data/pasajeros.cs
     df = pd.read_csv(archivo_pasajeros)
     habitaciones_futuras = {}
     fecha_hoy = datetime.now().strftime('%d/%m/%Y')
-    
+    hoy_dt = datetime.strptime(fecha_hoy, '%d/%m/%Y')
+    pasajeros_futuros_por_habitacion = {}
+
     for _, row in df.iterrows():
         fecha_ingreso = row['Fecha de ingreso']
-        
-        # Solo incluir si ingresa en el futuro (fecha ingreso > hoy)
+
         try:
             ingreso_dt = datetime.strptime(fecha_ingreso, '%d/%m/%Y')
-            hoy_dt = datetime.strptime(fecha_hoy, '%d/%m/%Y')
-            
             if ingreso_dt > hoy_dt:
-                habitaciones_futuras[int(row['Nro. habitación'])] = {
-                    'pasajero': row['Apellido y nombre'],
-                    'plazas': int(row['Plazas ocupadas']),
-                    'ingreso': row['Fecha de ingreso'],
-                    'egreso': row['Fecha de egreso'],
-                    'servicios': row['Servicios']
-                }
+                num_hab = int(row['Nro. habitación'])
+                if num_hab not in pasajeros_futuros_por_habitacion:
+                    pasajeros_futuros_por_habitacion[num_hab] = []
+                pasajeros_futuros_por_habitacion[num_hab].append(row.to_dict())
         except:
             pass
+
+    for num_hab, pasajeros_hab in pasajeros_futuros_por_habitacion.items():
+        titular = obtener_titular_por_edad(pasajeros_hab)
+        if not titular:
+            continue
+
+        cantidad_pasajeros = len(pasajeros_hab)
+
+        try:
+            plazas_titular = int(titular.get('Plazas ocupadas', 0))
+        except:
+            plazas_titular = 0
+
+        habitaciones_futuras[num_hab] = {
+            'pasajero': titular['Apellido y nombre'],
+            'plazas': max(cantidad_pasajeros, plazas_titular),
+            'ingreso': titular['Fecha de ingreso'],
+            'egreso': titular['Fecha de egreso'],
+            'servicios': titular['Servicios']
+        }
     
     return habitaciones_futuras
 
@@ -224,7 +250,14 @@ def obtener_habitaciones_con_consumos(archivo_consumos='data/consumos_diarios.cs
     if not os.path.exists(archivo_consumos):
         return set()
     
-    df = pd.read_csv(archivo_consumos)
+    try:
+        df = pd.read_csv(archivo_consumos)
+    except EmptyDataError:
+        return set()
+
+    if df.empty or 'habitacion' not in df.columns:
+        return set()
+
     return set(df['habitacion'].astype(int).unique())
 
 
@@ -253,6 +286,65 @@ def obtener_habitaciones_checkout():
             checkouts_hoy.add(num_hab)
     
     return checkouts_hoy
+
+
+def obtener_habitaciones_checkout_pendientes(archivo_pasajeros='data/pasajeros.csv'):
+    """
+    Obtiene habitaciones con checkout pendiente: ingreso <= hoy y egreso <= hoy.
+    Incluye checkouts de hoy y vencidos por cambio de fecha del sistema.
+
+    Retorna un diccionario con número de habitación como key y datos del titular.
+    """
+    if not os.path.exists(archivo_pasajeros):
+        return {}
+
+    df = pd.read_csv(archivo_pasajeros)
+    hoy_dt = datetime.now().date()
+    ingreso_dt = pd.to_datetime(df['Fecha de ingreso'], format='%d/%m/%Y', errors='coerce')
+    egreso_dt = pd.to_datetime(df['Fecha de egreso'], format='%d/%m/%Y', errors='coerce')
+
+    mask_pendientes = (
+        ingreso_dt.dt.date <= hoy_dt
+    ) & (
+        egreso_dt.dt.date <= hoy_dt
+    )
+
+    df_pendientes = df[mask_pendientes].copy()
+    if df_pendientes.empty:
+        return {}
+
+    habitaciones_pendientes = {}
+    habitaciones_con_pasajeros = {}
+
+    for _, row in df_pendientes.iterrows():
+        num_hab = int(row['Nro. habitación'])
+        if num_hab not in habitaciones_con_pasajeros:
+            habitaciones_con_pasajeros[num_hab] = []
+        habitaciones_con_pasajeros[num_hab].append(row.to_dict())
+
+    for num_hab, pasajeros_hab in habitaciones_con_pasajeros.items():
+        titular = obtener_titular_por_edad(pasajeros_hab)
+        if not titular:
+            continue
+
+        cantidad_pasajeros = len(pasajeros_hab)
+
+        try:
+            plazas_titular = int(titular.get('Plazas ocupadas', 0))
+        except:
+            plazas_titular = 0
+
+        habitaciones_pendientes[num_hab] = {
+            'pasajero': titular['Apellido y nombre'],
+            'plazas': max(cantidad_pasajeros, plazas_titular),
+            'ingreso': titular['Fecha de ingreso'],
+            'egreso': titular['Fecha de egreso'],
+            'servicios': titular.get('Servicios', ''),
+            'edad': int(titular.get('Edad', 0)),
+            'voucher': str(titular.get('Voucher', '')).strip()
+        }
+
+    return habitaciones_pendientes
 
 
 def calcular_estado_habitacion(num_habitacion, habitaciones_ocupadas, habitaciones_con_consumos, checkouts_hoy=None, habitaciones_reservadas=None):
@@ -321,6 +413,7 @@ def obtener_datos_dashboard():
     total_ocupadas = len(habitaciones_ocupadas)
     total_con_consumos = len([h for h, e in estados.items() if e == 'con_consumos'])
     total_checkouts = len(checkouts_hoy)
+    total_checkouts_pendientes = len(obtener_habitaciones_checkout_pendientes())
     
     # Contar reservadas que NO están ocupadas actualmente
     reservadas_no_ocupadas = len([h for h in habitaciones_reservadas if h not in habitaciones_ocupadas])
@@ -336,7 +429,8 @@ def obtener_datos_dashboard():
         'reservadas': reservadas_no_ocupadas,  # Solo las que no están ocupadas ahora
         'con_consumos': total_con_consumos,
         'sin_consumos': total_ocupadas - total_con_consumos,
-        'checkouts_hoy': total_checkouts
+        'checkouts_hoy': total_checkouts,
+        'checkouts_pendientes': total_checkouts_pendientes
     }
     
     return {
