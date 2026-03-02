@@ -155,11 +155,11 @@
         <!-- Header -->
         <div class="header-checkout">
             {% if total_habitaciones == 1 %}
-            <h1>🚪 Checkout de Habitación</h1>
-            <p class="lead">Resumen de la habitación con salida programada para hoy</p>
+            <h1>🚪 Checkout Pendiente de Habitación</h1>
+            <p class="lead">Resumen de la habitación con checkout pendiente (hoy o vencido)</p>
             {% else %}
-            <h1>🚪 Checkout Masivo - Contingente</h1>
-            <p class="lead">Resumen de habitaciones con salida programada para hoy</p>
+            <h1>🚪 Checkout Masivo Pendiente - Contingente</h1>
+            <p class="lead">Resumen de habitaciones con checkout pendiente (hoy o vencido)</p>
             {% endif %}
         </div>
 
@@ -167,7 +167,7 @@
         <div class="resumen-general">
             <div class="stat-box danger">
                 <div class="stat-number">{{ total_habitaciones }}</div>
-                <div class="stat-label">{% if total_habitaciones == 1 %}Habitación para Checkout{% else %}Habitaciones para Checkout{% endif %}</div>
+                <div class="stat-label">{% if total_habitaciones == 1 %}Habitación Pendiente{% else %}Habitaciones Pendientes{% endif %}</div>
             </div>
             
             <div class="stat-box {% if total_consumos > 0 %}success{% else %}secondary{% endif %}">

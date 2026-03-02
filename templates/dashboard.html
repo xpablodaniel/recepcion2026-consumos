@@ -216,12 +216,12 @@
                     <a href="/ver-consumos" class="btn btn-outline-secondary btn-lg">
                         📋 Consulta de Consumos
                     </a>
-                    {% if estadisticas.checkouts_hoy > 0 %}
+                    {% if estadisticas.checkouts_pendientes > 0 %}
                     <a href="/checkout-masivo" class="btn btn-danger btn-lg" style="animation: pulse-checkout 2s infinite;">
-                        {% if estadisticas.checkouts_hoy == 1 %}
-                        🚪 Realizar Checkout (1 hab.)
+                        {% if estadisticas.checkouts_pendientes == 1 %}
+                        🚪 Procesar Checkout Pendiente (1 hab.)
                         {% else %}
-                        🚪 Checkout Masivo Contingente ({{ estadisticas.checkouts_hoy }} hab.)
+                        🚪 Checkout Masivo Pendiente ({{ estadisticas.checkouts_pendientes }} hab.)
                         {% endif %}
                     </a>
                     {% endif %}
@@ -250,8 +250,8 @@
                     <div class="stat-label">Disponibles</div>
                 </div>
                 <div class="stat-card" style="border-left-color: #dc3545;">
-                    <div class="stat-number" style="color: #dc3545;">{{ estadisticas.checkouts_hoy }}</div>
-                    <div class="stat-label">Check-outs Hoy</div>
+                    <div class="stat-number" style="color: #dc3545;">{{ estadisticas.checkouts_pendientes }}</div>
+                    <div class="stat-label">Check-outs Pendientes</div>
                 </div>
             </div>
         </div>
@@ -280,7 +280,7 @@
                             <div class="habitacion-info">✨ Disponible</div>
                             <div class="habitacion-pasajero" style="font-size: 0.65rem;">Click para Check-in</div>
                         {% elif estado == 'reservada' %}
-                            <div class="habitacion-info">📅 Reserva</div>
+                            <div class="habitacion-info">{{ reservadas[num_hab].plazas }} PAX • 📅 Reserva</div>
                             <div class="habitacion-pasajero" style="font-size: 0.7rem;">Ingreso: {{ reservadas[num_hab].ingreso }}</div>
                             <div class="habitacion-pasajero" style="font-size: 0.6rem; margin-top: 3px; color: #084298; font-weight: 600;">⚡ Click para Express</div>
                         {% elif estado == 'checkout' %}

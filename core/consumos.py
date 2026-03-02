@@ -5,6 +5,7 @@ Módulo para gestionar operaciones de consumos individuales por habitación.
 import pandas as pd
 import os
 from datetime import datetime
+from pandas.errors import EmptyDataError
 
 
 def obtener_consumos_habitacion(num_habitacion, archivo_consumos='data/consumos_diarios.csv'):
@@ -17,7 +18,14 @@ def obtener_consumos_habitacion(num_habitacion, archivo_consumos='data/consumos_
     if not os.path.exists(archivo_consumos):
         return pd.DataFrame()
     
-    df = pd.read_csv(archivo_consumos)
+    try:
+        df = pd.read_csv(archivo_consumos)
+    except EmptyDataError:
+        return pd.DataFrame(columns=['fecha', 'habitacion', 'pasajero', 'categoria', 'monto'])
+
+    if df.empty or 'habitacion' not in df.columns:
+        return pd.DataFrame(columns=['fecha', 'habitacion', 'pasajero', 'categoria', 'monto'])
+
     consumos_hab = df[df['habitacion'] == num_habitacion].copy()
     
     # Agregar índice para identificar cada consumo
