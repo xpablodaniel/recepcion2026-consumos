@@ -8,6 +8,18 @@ import os
 from datetime import datetime
 from pandas.errors import EmptyDataError
 
+def extraer_num_hab(valor):
+    """
+    Extrae el número de habitación como int, ignorando sufijos de cama como 'A', 'B', 'C'.
+    Ejemplos: '227 A' → 227, '238 C' → 238, 227 → 227
+    Retorna None si el valor no es parseable.
+    """
+    try:
+        return int(str(valor).strip().split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
 # Estructura del hotel
 PISOS = {
     1: list(range(101, 122)),  # 101-121 (21 habitaciones)
@@ -96,7 +108,9 @@ def obtener_habitaciones_ocupadas(archivo_pasajeros='data/pasajeros.csv'):
     
     # Primero agrupar todos los pasajeros por habitación
     for pasajero in pasajeros_activos:
-        num_hab = int(pasajero['Nro. habitación'])
+        num_hab = extraer_num_hab(pasajero['Nro. habitación'])
+        if num_hab is None:
+            continue
         if num_hab not in habitaciones_con_pasajeros:
             habitaciones_con_pasajeros[num_hab] = []
         habitaciones_con_pasajeros[num_hab].append(pasajero)
@@ -161,7 +175,7 @@ def obtener_todos_pasajeros_habitacion(num_habitacion, archivo_pasajeros='data/p
     pasajeros = []
     for _, row in df.iterrows():
         # Verificar que sea la habitación correcta
-        if int(row['Nro. habitación']) != num_habitacion:
+        if extraer_num_hab(row['Nro. habitación']) != num_habitacion:
             continue
         
         # Verificar que ya ingresó
@@ -212,7 +226,9 @@ def obtener_habitaciones_reservadas_futuras(archivo_pasajeros='data/pasajeros.cs
         try:
             ingreso_dt = datetime.strptime(fecha_ingreso, '%d/%m/%Y')
             if ingreso_dt > hoy_dt:
-                num_hab = int(row['Nro. habitación'])
+                num_hab = extraer_num_hab(row['Nro. habitación'])
+                if num_hab is None:
+                    continue
                 if num_hab not in pasajeros_futuros_por_habitacion:
                     pasajeros_futuros_por_habitacion[num_hab] = []
                 pasajeros_futuros_por_habitacion[num_hab].append(row.to_dict())
@@ -317,7 +333,9 @@ def obtener_habitaciones_checkout_pendientes(archivo_pasajeros='data/pasajeros.c
     habitaciones_con_pasajeros = {}
 
     for _, row in df_pendientes.iterrows():
-        num_hab = int(row['Nro. habitación'])
+        num_hab = extraer_num_hab(row['Nro. habitación'])
+        if num_hab is None:
+            continue
         if num_hab not in habitaciones_con_pasajeros:
             habitaciones_con_pasajeros[num_hab] = []
         habitaciones_con_pasajeros[num_hab].append(row.to_dict())

@@ -6,11 +6,14 @@ import sys
 import tempfile
 
 # Importar módulos del core
-from core.dashboard import obtener_datos_dashboard, obtener_habitaciones_ocupadas
+from core.dashboard import obtener_datos_dashboard, obtener_habitaciones_ocupadas, extraer_num_hab
 from core.consumos import (
     obtener_resumen_habitacion, 
     agregar_consumo, 
-    eliminar_consumo_por_indice
+    eliminar_consumo_por_indice,
+    agregar_consumo_bebida_rapida,
+    obtener_catalogo_bebidas,
+    CANTIDADES_RAPIDAS
 )
 from core.reserva_express import crear_reserva_express, obtener_habitaciones_disponibles, validar_datos_reserva
 
@@ -30,7 +33,9 @@ def validar_pasajero(habitacion):
         return None
     
     df_pasajeros = pd.read_csv(DB_PASAJEROS)
-    pasajero = df_pasajeros[df_pasajeros['Nro. habitación'] == int(habitacion)]
+    pasajero = df_pasajeros[
+        df_pasajeros['Nro. habitación'].apply(extraer_num_hab) == int(habitacion)
+    ]
     
     if pasajero.empty:
         return None
@@ -73,6 +78,8 @@ def ficha_habitacion(num_habitacion):
     
     # Verificar si es checkout hoy
     resumen['es_checkout_hoy'] = es_checkout_hoy(datos_pasajero['egreso'])
+    resumen['catalogo_bebidas'] = obtener_catalogo_bebidas()
+    resumen['cantidades_rapidas'] = CANTIDADES_RAPIDAS
     
     return render_template('ficha_habitacion.html', habitacion=resumen)
 
@@ -110,6 +117,25 @@ def agregar_consumo_habitacion(num_habitacion):
     else:
         flash('❌ Error al agregar el consumo', 'danger')
     
+    return redirect(f'/habitacion/{num_habitacion}')
+
+
+@app.route('/habitacion/<int:num_habitacion>/agregar-bebida', methods=['POST'])
+def agregar_bebida_rapida_habitacion(num_habitacion):
+    """Agrega una bebida rápida con producto y cantidad predefinidos."""
+    producto = request.form.get('producto')
+    cantidad = request.form.get('cantidad', 1)
+    pasajero_seleccionado = request.form.get('pasajero')
+
+    habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+    if num_habitacion not in habitaciones_ocupadas:
+        flash('Habitación no encontrada', 'danger')
+        return redirect('/dashboard')
+
+    pasajero = pasajero_seleccionado or habitaciones_ocupadas[num_habitacion]['pasajero']
+    exito, mensaje = agregar_consumo_bebida_rapida(num_habitacion, producto, cantidad, pasajero)
+
+    flash(f'✅ {mensaje}' if exito else f'❌ {mensaje}', 'success' if exito else 'danger')
     return redirect(f'/habitacion/{num_habitacion}')
 
 @app.route('/habitacion/<int:num_habitacion>/eliminar/<int:indice>')
@@ -162,7 +188,9 @@ def confirmar_checkout(num_habitacion):
         # 2. Eliminar pasajero del registro
         if os.path.exists(DB_PASAJEROS):
             df_pasajeros = pd.read_csv(DB_PASAJEROS)
-            df_pasajeros = df_pasajeros[df_pasajeros['Nro. habitación'] != num_habitacion]
+            df_pasajeros = df_pasajeros[
+                df_pasajeros['Nro. habitación'].apply(extraer_num_hab) != num_habitacion
+            ]
             df_pasajeros.to_csv(DB_PASAJEROS, index=False)
         
         flash(f'✅ Check-out realizado exitosamente. Habitación {num_habitacion} ahora disponible.', 'success')
@@ -234,7 +262,9 @@ def confirmar_checkout_masivo():
         )
 
         df_checkout = df_pasajeros[mask_checkout_pendiente].copy()
-        habitaciones_checkout = set(df_checkout['Nro. habitación'].astype(int).tolist())
+        habitaciones_checkout = set(
+            df_checkout['Nro. habitación'].apply(extraer_num_hab).dropna().astype(int).tolist()
+        )
 
         if not habitaciones_checkout:
             flash('No hay habitaciones para procesar', 'info')
@@ -251,7 +281,7 @@ def confirmar_checkout_masivo():
             consumos_habitacion = pd.to_numeric(df_consumos['habitacion'], errors='coerce').fillna(-1).astype(int)
             pasajeros_checkout_keys = set(
                 zip(
-                    df_checkout['Nro. habitación'].astype(int),
+                    df_checkout['Nro. habitación'].apply(extraer_num_hab).fillna(-1).astype(int),
                     df_checkout['Apellido y nombre'].astype(str)
                 )
             )
@@ -960,6 +990,110 @@ def cambiar_habitacion_route(num_habitacion):
     else:
         flash(f'❌ {mensaje}', 'danger')
         return redirect(f'/cambiar-habitacion/{num_habitacion}')
+
+
+@app.route('/cambiar-habitacion-parcial/<int:num_habitacion>', methods=['GET', 'POST'])
+def cambiar_habitacion_parcial_route(num_habitacion):
+    """Interfaz para mover un solo pasajero a una habitación vacía u ocupada con cupo."""
+    from core.cambio_habitacion import (
+        obtener_habitaciones_destino_para_cambio_parcial,
+        cambiar_pasajero_individual,
+        validar_cambio_parcial
+    )
+    from core.dashboard import obtener_todos_pasajeros_habitacion
+
+    if request.method == 'GET':
+        habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+
+        if num_habitacion not in habitaciones_ocupadas:
+            flash('La habitación no está ocupada actualmente', 'danger')
+            return redirect('/dashboard')
+
+        datos_pasajero = habitaciones_ocupadas[num_habitacion]
+        pasajeros_habitacion = obtener_todos_pasajeros_habitacion(num_habitacion)
+        destinos = obtener_habitaciones_destino_para_cambio_parcial(num_habitacion)
+
+        if len(pasajeros_habitacion) <= 1:
+            flash('Esta habitación tiene un solo pasajero. Use cambio total.', 'info')
+            return redirect(f'/cambiar-habitacion/{num_habitacion}')
+
+        return render_template(
+            'cambiar_habitacion_parcial.html',
+            habitacion_origen=num_habitacion,
+            datos_pasajero=datos_pasajero,
+            pasajeros_habitacion=pasajeros_habitacion,
+            habitaciones_destino=destinos,
+            total_destinos=len(destinos)
+        )
+
+    habitacion_destino = request.form.get('habitacion_destino')
+    nombre_pasajero = request.form.get('pasajero')
+    motivo = request.form.get('motivo', '')
+    observaciones = request.form.get('observaciones', '')
+
+    motivo_completo = f"{motivo}" if motivo else ""
+    if observaciones:
+        motivo_completo = f"{motivo_completo} - {observaciones}" if motivo_completo else observaciones
+
+    valido, error = validar_cambio_parcial(num_habitacion, habitacion_destino, nombre_pasajero)
+    if not valido:
+        flash(f'❌ {error}', 'danger')
+        return redirect(f'/cambiar-habitacion-parcial/{num_habitacion}')
+
+    exito, mensaje = cambiar_pasajero_individual(num_habitacion, habitacion_destino, nombre_pasajero, motivo_completo)
+    if exito:
+        flash(f'✅ {mensaje}', 'success')
+        return redirect(f'/habitacion/{habitacion_destino}')
+
+    flash(f'❌ {mensaje}', 'danger')
+    return redirect(f'/cambiar-habitacion-parcial/{num_habitacion}')
+
+
+@app.route('/bebidas-rapidas', methods=['GET', 'POST'])
+def bebidas_rapidas():
+    """Pantalla de carga masiva de bebidas con productos y cantidades rápidas."""
+    from core.dashboard import obtener_todos_pasajeros_habitacion
+
+    if request.method == 'POST':
+        habitacion = request.form.get('habitacion')
+        pasajero = request.form.get('pasajero')
+        producto = request.form.get('producto')
+        cantidad = request.form.get('cantidad', 1)
+
+        try:
+            habitacion = int(habitacion)
+        except Exception:
+            flash('❌ Habitación inválida', 'danger')
+            return redirect('/bebidas-rapidas')
+
+        habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+        if habitacion not in habitaciones_ocupadas:
+            flash('❌ La habitación no está ocupada', 'danger')
+            return redirect('/bebidas-rapidas')
+
+        exito, mensaje = agregar_consumo_bebida_rapida(habitacion, producto, cantidad, pasajero)
+        flash(f'✅ {mensaje}' if exito else f'❌ {mensaje}', 'success' if exito else 'danger')
+        return redirect('/bebidas-rapidas')
+
+    habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+    habitaciones = []
+    for num_habitacion in sorted(habitaciones_ocupadas.keys()):
+        pasajeros = obtener_todos_pasajeros_habitacion(num_habitacion)
+        if not pasajeros:
+            pasajeros = [{'nombre': habitaciones_ocupadas[num_habitacion]['pasajero']}]
+
+        habitaciones.append({
+            'numero': num_habitacion,
+            'pasajeros': pasajeros,
+            'titular': habitaciones_ocupadas[num_habitacion]['pasajero']
+        })
+
+    return render_template(
+        'bebidas_rapidas.html',
+        habitaciones=habitaciones,
+        catalogo_bebidas=obtener_catalogo_bebidas(),
+        cantidades_rapidas=CANTIDADES_RAPIDAS
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
