@@ -81,7 +81,8 @@
             font-weight: 500;
         }
         
-        .categoria-bebidas {
+        .categoria-bebidas,
+        .categoria-desayuno {
             background: #d1ecf1;
             color: #0c5460;
         }
@@ -238,8 +239,8 @@
                             <tr>
                                 <td>{{ consumo.fecha }}</td>
                                 <td>
-                                    <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                        {{ consumo.categoria }}
+                                    <span class="badge-categoria categoria-{{ consumo.categoria_css }}">
+                                        {{ consumo.categoria_mostrar }}
                                     </span>
                                 </td>
                                 <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
@@ -272,8 +273,8 @@
                             <td><small>{{ consumo.pasajero }}</small></td>
                             {% endif %}
                             <td>
-                                <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                    {{ consumo.categoria }}
+                                <span class="badge-categoria categoria-{{ consumo.categoria_css }}">
+                                    {{ consumo.categoria_mostrar }}
                                 </span>
                             </td>
                             <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
