@@ -102,7 +102,8 @@
             font-weight: 500;
         }
         
-        .categoria-bebidas {
+        .categoria-bebidas,
+        .categoria-desayuno {
             background: #d1ecf1;
             color: #0c5460;
         }
@@ -174,6 +175,26 @@
         .btn-eliminar {
             padding: 5px 15px;
             font-size: 0.9rem;
+        }
+
+        .bebida-opcion,
+        .cantidad-rapida-btn {
+            border-radius: 12px;
+        }
+
+        .bebida-opcion.seleccionada,
+        .cantidad-rapida-btn.seleccionada {
+            box-shadow: inset 0 0 0 2px #0d6efd;
+            background: #e7f1ff;
+            color: #0d6efd;
+        }
+
+        .resumen-bebida-rapida {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-top: 15px;
         }
     </style>
 </head>
@@ -264,8 +285,76 @@
                 {% endfor %}
               {% endif %}
             {% endwith %}
+
+            <div class="seccion-titulo">
+                Carga de Consumos
+            </div>
+
+            <div class="form-agregar-consumo">
+                <form action="/habitacion/{{ habitacion.numero }}/agregar-bebida" method="POST" id="form-bebida-rapida">
+                    {% if habitacion.cantidad_pasajeros > 1 %}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">👤 Pasajero</label>
+                        <select name="pasajero" class="form-select" required>
+                            <option value="">Seleccionar pasajero...</option>
+                            {% for pasajero in habitacion.todos_pasajeros %}
+                            <option value="{{ pasajero.nombre }}">{{ pasajero.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bebida</label>
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% for bebida in habitacion.catalogo_bebidas %}
+                            <button type="button"
+                                    class="btn btn-outline-primary bebida-opcion {% if not bebida.habilitado %}disabled{% endif %}"
+                                    data-producto="{{ bebida.codigo }}"
+                                    data-nombre="{{ bebida.nombre }}"
+                                    data-precio="{{ bebida.precio if bebida.precio is not none else '' }}"
+                                    {% if not bebida.habilitado %}disabled title="Precio pendiente de configurar"{% endif %}>
+                                <div>{{ bebida.nombre }}</div>
+                                <small>
+                                    {% if bebida.habilitado %}
+                                    ${{ "%.0f"|format(bebida.precio) }}
+                                    {% else %}
+                                    Precio pendiente
+                                    {% endif %}
+                                </small>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cantidad rapida</label>
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% for cantidad in habitacion.cantidades_rapidas %}
+                            <button type="button" class="btn btn-outline-secondary cantidad-rapida-btn {% if loop.first %}seleccionada{% endif %}" data-cantidad="{{ cantidad }}">
+                                x{{ cantidad }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="producto" id="producto-bebida-rapida">
+                    <input type="hidden" name="cantidad" id="cantidad-bebida-rapida" value="{{ habitacion.cantidades_rapidas[0] if habitacion.cantidades_rapidas else 1 }}">
+
+                    <div class="resumen-bebida-rapida" id="resumen-bebida-rapida">
+                        Seleccione una bebida para ver el total rapido.
+                    </div>
+
+                    <div class="d-grid mt-3">
+                        <button type="submit" class="btn btn-primary btn-lg" id="btn-submit-bebida" disabled>
+                            Agregar Consumo
+                        </button>
+                    </div>
+                </form>
+            </div>
             
             <div class="form-agregar-consumo">
+                <div class="mb-3 fw-bold">➕ Carga Manual de otros consumos</div>
                 <form action="/habitacion/{{ habitacion.numero }}/agregar" method="POST" class="row g-3">
                     {% if habitacion.cantidad_pasajeros > 1 %}
                     <div class="col-md-12">
@@ -284,7 +373,7 @@
                         <label class="form-label fw-bold">Categoría</label>
                         <select name="categoria" class="form-select" required>
                             <option value="">Seleccionar...</option>
-                            <option value="Bebidas">🍺 Bebidas</option>
+                            <option value="Desayuno">🥐 Desayuno</option>
                             <option value="Map">🍽️ Map</option>
                             <option value="Estadía">🏨 Estadía</option>
                         </select>
@@ -327,9 +416,14 @@
                             <tr>
                                 <td>{{ consumo.fecha }}</td>
                                 <td>
-                                    <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                        {{ consumo.categoria }}
+                                    <span class="badge-categoria categoria-{{ consumo.categoria_css }}">
+                                        {{ consumo.categoria_mostrar }}
                                     </span>
+                                    {% if consumo.item %}
+                                    <div class="small text-muted mt-1">
+                                        {{ consumo.item }}{% if consumo.cantidad %} x{{ consumo.cantidad|int }}{% endif %}{% if consumo.precio_unitario %} · ${{ "%.0f"|format(consumo.precio_unitario|float) }} c/u{% endif %}
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
                                 <td class="text-center">
@@ -370,9 +464,14 @@
                             <td><small>{{ consumo.pasajero }}</small></td>
                             {% endif %}
                             <td>
-                                <span class="badge-categoria categoria-{{ consumo.categoria|lower }}">
-                                    {{ consumo.categoria }}
+                                <span class="badge-categoria categoria-{{ consumo.categoria_css }}">
+                                    {{ consumo.categoria_mostrar }}
                                 </span>
+                                {% if consumo.item %}
+                                <div class="small text-muted mt-1">
+                                    {{ consumo.item }}{% if consumo.cantidad %} x{{ consumo.cantidad|int }}{% endif %}{% if consumo.precio_unitario %} · ${{ "%.0f"|format(consumo.precio_unitario|float) }} c/u{% endif %}
+                                </div>
+                                {% endif %}
                             </td>
                             <td class="text-end fw-bold">${{ "%.2f"|format(consumo.monto) }}</td>
                             <td class="text-center">
@@ -453,5 +552,61 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const bebidaButtons = document.querySelectorAll('.bebida-opcion');
+        const cantidadButtons = document.querySelectorAll('.cantidad-rapida-btn');
+        const productoInput = document.getElementById('producto-bebida-rapida');
+        const cantidadInput = document.getElementById('cantidad-bebida-rapida');
+        const resumen = document.getElementById('resumen-bebida-rapida');
+        const submitButton = document.getElementById('btn-submit-bebida');
+
+        let bebidaSeleccionada = null;
+        let cantidadSeleccionada = Number(cantidadInput?.value || 1);
+
+        function actualizarResumenBebida() {
+            if (!resumen || !submitButton) {
+                return;
+            }
+
+            if (!bebidaSeleccionada) {
+                resumen.textContent = 'Seleccione una bebida para ver el total rapido.';
+                submitButton.disabled = true;
+                return;
+            }
+
+            const nombre = bebidaSeleccionada.dataset.nombre;
+            const precio = Number(bebidaSeleccionada.dataset.precio || 0);
+            const total = precio * cantidadSeleccionada;
+
+            resumen.textContent = `${cantidadSeleccionada} x ${nombre} = $${total.toLocaleString('es-AR')}`;
+            submitButton.disabled = false;
+        }
+
+        bebidaButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                bebidaButtons.forEach((item) => item.classList.remove('seleccionada'));
+                button.classList.add('seleccionada');
+                bebidaSeleccionada = button;
+                if (productoInput) {
+                    productoInput.value = button.dataset.producto;
+                }
+                actualizarResumenBebida();
+            });
+        });
+
+        cantidadButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                cantidadButtons.forEach((item) => item.classList.remove('seleccionada'));
+                button.classList.add('seleccionada');
+                cantidadSeleccionada = Number(button.dataset.cantidad || 1);
+                if (cantidadInput) {
+                    cantidadInput.value = cantidadSeleccionada;
+                }
+                actualizarResumenBebida();
+            });
+        });
+
+        actualizarResumenBebida();
+    </script>
 </body>
 </html>

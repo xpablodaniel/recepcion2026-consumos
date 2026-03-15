@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, flash, send_file
 import pandas as pd
+from pandas.errors import EmptyDataError, ParserError
 import os
 from datetime import datetime
 import sys
@@ -10,7 +11,10 @@ from core.dashboard import obtener_datos_dashboard, obtener_habitaciones_ocupada
 from core.consumos import (
     obtener_resumen_habitacion, 
     agregar_consumo, 
-    eliminar_consumo_por_indice
+    eliminar_consumo_por_indice,
+    agregar_consumo_bebida_rapida,
+    obtener_catalogo_bebidas,
+    CANTIDADES_RAPIDAS,
 )
 from core.reserva_express import crear_reserva_express, obtener_habitaciones_disponibles, validar_datos_reserva
 
@@ -20,6 +24,53 @@ app.secret_key = 'temporada_2026_recepcion_key_secreta'
 # Archivos de datos
 DB_PASAJEROS = 'data/pasajeros.csv'
 DB_CONSUMOS = 'data/consumos_diarios.csv'
+
+
+def _normalizar_categorias_para_reportes(df_consumos):
+    """Agrupa Desayuno dentro de la columna histórica de Bebidas para cierres y exportaciones."""
+    if 'categoria' not in df_consumos.columns:
+        return df_consumos
+
+    df_consumos = df_consumos.copy()
+    df_consumos['categoria'] = df_consumos['categoria'].replace({'Desayuno': 'Bebidas'})
+    return df_consumos
+
+
+def _leer_csv_subido(archivo):
+    """Lee un CSV subido intentando formatos comunes y valida que no esté vacío."""
+    archivo.stream.seek(0, os.SEEK_END)
+    tamano = archivo.stream.tell()
+    archivo.stream.seek(0)
+
+    if tamano == 0:
+        raise ValueError('El archivo está vacío')
+
+    intentos = [
+        (',', 'utf-8-sig'),
+        (';', 'utf-8-sig'),
+        (',', 'latin1'),
+        (';', 'latin1'),
+    ]
+
+    ultimo_error = None
+    for separador, encoding in intentos:
+        try:
+            archivo.stream.seek(0)
+            df = pd.read_csv(archivo, sep=separador, encoding=encoding)
+
+            # Si detecta una única columna con ';', probablemente era separador equivocado.
+            if len(df.columns) == 1 and separador == ',' and ';' in str(df.columns[0]):
+                continue
+
+            return df
+        except (EmptyDataError, ParserError, UnicodeDecodeError) as exc:
+            ultimo_error = exc
+            continue
+
+    if ultimo_error:
+        raise ValueError('No se pudo interpretar el CSV. Verifique separador (coma o punto y coma) y codificación') from ultimo_error
+
+    raise ValueError('No se pudo leer el archivo CSV')
 
 def validar_pasajero(habitacion):
     """
@@ -73,6 +124,8 @@ def ficha_habitacion(num_habitacion):
     
     # Verificar si es checkout hoy
     resumen['es_checkout_hoy'] = es_checkout_hoy(datos_pasajero['egreso'])
+    resumen['catalogo_bebidas'] = obtener_catalogo_bebidas()
+    resumen['cantidades_rapidas'] = CANTIDADES_RAPIDAS
     
     return render_template('ficha_habitacion.html', habitacion=resumen)
 
@@ -110,6 +163,25 @@ def agregar_consumo_habitacion(num_habitacion):
     else:
         flash('❌ Error al agregar el consumo', 'danger')
     
+    return redirect(f'/habitacion/{num_habitacion}')
+
+
+@app.route('/habitacion/<int:num_habitacion>/agregar-bebida', methods=['POST'])
+def agregar_bebida_rapida_habitacion(num_habitacion):
+    """Agrega una bebida rápida con producto y cantidad predefinidos."""
+    producto = request.form.get('producto')
+    cantidad = request.form.get('cantidad', 1)
+    pasajero_seleccionado = request.form.get('pasajero')
+
+    habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+    if num_habitacion not in habitaciones_ocupadas:
+        flash('Habitacion no encontrada', 'danger')
+        return redirect('/dashboard')
+
+    pasajero = pasajero_seleccionado or habitaciones_ocupadas[num_habitacion]['pasajero']
+    exito, mensaje = agregar_consumo_bebida_rapida(num_habitacion, producto, cantidad, pasajero)
+
+    flash(f'✅ {mensaje}' if exito else f'❌ {mensaje}', 'success' if exito else 'danger')
     return redirect(f'/habitacion/{num_habitacion}')
 
 @app.route('/habitacion/<int:num_habitacion>/eliminar/<int:indice>')
@@ -297,23 +369,10 @@ def cargar_consumo():
         flash(f'❌ La habitación {habitacion} no está registrada en el sistema', 'danger')
         return redirect('/')
     
-    # Registrar el consumo
-    nuevo_registro = {
-        'fecha': datetime.now().strftime('%d/%m/%Y %H:%M'),
-        'habitacion': habitacion,
-        'pasajero': nombre_pasajero,
-        'categoria': categoria,
-        'monto': float(monto)
-    }
-    
-    # Guardar en el CSV
-    df_nuevo = pd.DataFrame([nuevo_registro])
-    
-    if os.path.exists(DB_CONSUMOS):
-        df_nuevo.to_csv(DB_CONSUMOS, mode='a', header=False, index=False)
-    else:
-        df_nuevo.to_csv(DB_CONSUMOS, mode='w', header=True, index=False)
-    
+    if not agregar_consumo(habitacion, categoria, monto, nombre_pasajero, DB_CONSUMOS):
+        flash('❌ Error al registrar el consumo', 'danger')
+        return redirect('/')
+
     flash(f'✅ Consumo registrado: {categoria} - ${monto} para {nombre_pasajero} (Hab. {habitacion})', 'success')
     return redirect('/')
 
@@ -326,6 +385,7 @@ def cierre_dia():
 
     # 1. Leer los consumos registrados
     df = pd.read_csv(DB_CONSUMOS)
+    df = _normalizar_categorias_para_reportes(df)
 
     # 2. Pivotear datos: Habitaciones como filas, solo 3 categorías como columnas
     tabla_cierre = df.pivot_table(
@@ -365,6 +425,7 @@ def cierre_xlsx():
     try:
         # Leer consumos
         df_consumos = pd.read_csv(DB_CONSUMOS)
+        df_consumos = _normalizar_categorias_para_reportes(df_consumos)
         
         # Crear tabla pivote: habitaciones en filas, categorías en columnas
         tabla_pivot = df_consumos.pivot_table(
@@ -619,6 +680,53 @@ def ver_consumos():
     
     return html
 
+
+@app.route('/bebidas-rapidas', methods=['GET', 'POST'])
+def bebidas_rapidas():
+    """Pantalla de carga masiva de bebidas con productos y cantidades rapidas."""
+    from core.dashboard import obtener_todos_pasajeros_habitacion
+
+    if request.method == 'POST':
+        habitacion = request.form.get('habitacion')
+        pasajero = request.form.get('pasajero')
+        producto = request.form.get('producto')
+        cantidad = request.form.get('cantidad', 1)
+
+        try:
+            habitacion = int(habitacion)
+        except Exception:
+            flash('❌ Habitacion invalida', 'danger')
+            return redirect('/bebidas-rapidas')
+
+        habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+        if habitacion not in habitaciones_ocupadas:
+            flash('❌ La habitacion no esta ocupada', 'danger')
+            return redirect('/bebidas-rapidas')
+
+        exito, mensaje = agregar_consumo_bebida_rapida(habitacion, producto, cantidad, pasajero)
+        flash(f'✅ {mensaje}' if exito else f'❌ {mensaje}', 'success' if exito else 'danger')
+        return redirect('/bebidas-rapidas')
+
+    habitaciones_ocupadas = obtener_habitaciones_ocupadas()
+    habitaciones = []
+    for num_habitacion in sorted(habitaciones_ocupadas.keys()):
+        pasajeros = obtener_todos_pasajeros_habitacion(num_habitacion)
+        if not pasajeros:
+            pasajeros = [{'nombre': habitaciones_ocupadas[num_habitacion]['pasajero'], 'edad': ''}]
+
+        habitaciones.append({
+            'numero': num_habitacion,
+            'pasajeros': pasajeros,
+            'titular': habitaciones_ocupadas[num_habitacion]['pasajero']
+        })
+
+    return render_template(
+        'bebidas_rapidas.html',
+        habitaciones=habitaciones,
+        catalogo_bebidas=obtener_catalogo_bebidas(),
+        cantidades_rapidas=CANTIDADES_RAPIDAS
+    )
+
 @app.route('/eliminar-consumo/<int:indice>')
 def eliminar_consumo(indice):
     """Eliminar un consumo específico por su índice"""
@@ -781,7 +889,7 @@ def subir_pasajeros():
             shutil.copy(DB_PASAJEROS, backup_path)
         
         # Validar estructura del CSV
-        df_nuevo = pd.read_csv(archivo)
+        df_nuevo = _leer_csv_subido(archivo)
         columnas_requeridas = ['Nro. habitación', 'Fecha de ingreso', 'Fecha de egreso', 
                                'Apellido y nombre', 'Servicios']
         
